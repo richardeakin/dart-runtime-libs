@@ -25,6 +25,14 @@ typedef Dart_Port Dart_IsolateId;
  */
 #define ILLEGAL_ISOLATE_ID ILLEGAL_PORT
 
+
+/**
+ * Null value for breakpoint id. Guaranteed never to be associated
+ * with a valid breakpoint.
+ */
+#define ILLEGAL_BREAKPOINT_ID 0
+
+
 // DEPRECATED -- use Dart_PausedEventHandler
 typedef void Dart_BreakpointHandler(Dart_IsolateId isolate_id,
                                     Dart_Breakpoint breakpoint,
@@ -55,6 +63,7 @@ typedef void Dart_IsolateEventHandler(Dart_IsolateId isolate_id,
                                       Dart_IsolateEvent kind);
 
 typedef void Dart_PausedEventHandler(Dart_IsolateId isolate_id,
+                                     intptr_t bp_id,
                                      const Dart_CodeLocation& location);
 
 typedef void Dart_BreakpointResolvedHandler(Dart_IsolateId isolate_id,
@@ -352,14 +361,25 @@ DART_EXPORT Dart_Handle Dart_SetExceptionPauseInfo(
 DART_EXPORT Dart_ExceptionPauseInfo Dart_GetExceptionPauseInfo();
 
 /**
- * Returns in \trace the the current stack trace, or NULL if the
+ * Returns in \trace the current stack trace, or NULL if the
  * VM is not paused.
  *
  * Requires there to be a current isolate.
  *
- * \return A handle to the True object if no error occurs.
+ * \return A valid handle if no error occurs during the operation.
  */
 DART_EXPORT Dart_Handle Dart_GetStackTrace(Dart_StackTrace* trace);
+
+
+/**
+ * Returns in \trace the stack trace associated with the error given in \handle.
+ *
+ * Requires there to be a current isolate.
+ *
+ * \return A valid handle if no error occurs during the operation.
+ */
+DART_EXPORT Dart_Handle Dart_GetStackTraceFromError(Dart_Handle error,
+                                                    Dart_StackTrace* trace);
 
 
 /**
@@ -390,29 +410,27 @@ DART_EXPORT Dart_Handle Dart_GetActivationFrame(
 
 
 /**
- * DEPRECATED -- Use Dart_ActivationFrameGetLocation instead.
- *
  * Returns information about the given activation frame.
  * \function_name receives a string handle with the qualified
  *    function name.
  * \script_url receives a string handle with the url of the
  *    source script that contains the frame's function.
  * \line_number receives the line number in the script.
- * \library_id receives the id of the library in which the
- *    function in this frame is defined.
+ * \col_number receives the column number in the script, or -1 if column
+ *    information is not available
  *
  * Any or all of the out parameters above may be NULL.
  *
  * Requires there to be a current isolate.
  *
- * \return A handle to the True object if no error occurs.
+ * \return A valid handle if no error occurs during the operation.
  */
 DART_EXPORT Dart_Handle Dart_ActivationFrameInfo(
                             Dart_ActivationFrame activation_frame,
                             Dart_Handle* function_name,
                             Dart_Handle* script_url,
                             intptr_t* line_number,
-                            intptr_t* library_id);
+                            intptr_t* column_number);
 
 
 /**
@@ -461,6 +479,18 @@ DART_EXPORT Dart_Handle Dart_GetLocalVariables(
 
 
 /**
+ * Returns origin class of a function.
+ *
+ * Requires there to be a current isolate.
+ * 
+ * \return Returns the class id (a handle to an integer) of the class in
+ * which \function is defined. Returns a null handle if \function is defined
+ * at the top level. Returns an error object otherwise.
+ */
+DART_EXPORT Dart_Handle Dart_GetFunctionOrigin(Dart_Handle function);
+
+
+/**
  * Returns an array containing all the global variable names and values of
  * the library with given \library_id.
  *
@@ -475,6 +505,15 @@ DART_EXPORT Dart_Handle Dart_GetGlobalVariables(intptr_t library_id);
 
 /**
  * Execute the expression given in string \expr in the context
+ * of stack frame \activation_frame.
+ */
+DART_EXPORT Dart_Handle Dart_ActivationFrameEvaluate(
+                            Dart_ActivationFrame activation_frame,
+                            Dart_Handle expr_in);
+
+
+/**
+ * Execute the expression given in string \expr in the context
  * of \target.
  *
  * Requires there to be a current isolate.
@@ -484,7 +523,8 @@ DART_EXPORT Dart_Handle Dart_GetGlobalVariables(intptr_t library_id);
  * it were an instance method of the class of the object.
  * If \target is a Class, the expression is evaluated as if it
  * were a static method of that class.
- * TODO(hausner): add 'library' execution context.
+ * If \target is a Library, the expression is evaluated as if it
+ * were a top-level function in that library.
  * 
  * \return A handle to the computed value, or an error object if
  * the compilation of the expression fails, or if the evaluation throws
@@ -559,6 +599,27 @@ DART_EXPORT Dart_Handle Dart_GetClassInfo(intptr_t class_id,
                                           Dart_Handle* static_fields);
 
 
+/** Returns info about the given closure \closure.
+ *
+ * \param name receives handle to closure name (string).
+ *        Receives a null handle if the closure is anonymous.
+ * \param signature receives handle to closure signature (string).
+ * \param location.script_url receives a string handle with the url of
+ *        the source script that contains the closure.
+ *        Receives a null handle if there is no textual location
+ *        that corresponds to the fucntion.
+ * \param location.library_id receives the id of the library in which the
+ *        function in this frame is defined.
+ * \param location.token_pos receives the token position in the script.
+ *
+ * \return A handle to the value true if no error occurs.
+ */
+DART_EXPORT Dart_Handle Dart_GetClosureInfo(Dart_Handle closure,
+                                            Dart_Handle* name,
+                                            Dart_Handle* signature,
+                                            Dart_CodeLocation* location);
+
+
 /**
  * Returns an array containing all instance field names and values of
  * the given \object.
@@ -600,6 +661,15 @@ DART_EXPORT Dart_Handle Dart_GetLibraryFromId(intptr_t library_id);
 
 
 /**
+ * Returns in \library_id the library id of the given \library.
+ *
+ * \return A valid handle if no error occurs during the operation.
+ */
+DART_EXPORT Dart_Handle Dart_LibraryId(Dart_Handle library,
+                                       intptr_t* library_id);
+
+
+/**
  * Returns an array containing all variable names and values of
  * the given library \library_id.
  *
@@ -631,45 +701,29 @@ DART_EXPORT Dart_Handle Dart_GetLibraryImports(intptr_t library_id);
 
 
 /**
-* Returns the url of the library \library_id.
-*
-* Requires there to be a current isolate.
-*
-* \return A string handle containing the URL of the library.
-*/
+ * Returns the url of the library \library_id.
+ *
+ * Requires there to be a current isolate.
+ *
+ * \return A string handle containing the URL of the library.
+ */
 DART_EXPORT Dart_Handle Dart_GetLibraryURL(intptr_t library_id);
 
 
 /**
-* Returns the isolate object corresponding to the isolate id.
-*
-* \return The Dart_Isolate object corresponding to the isolate id.
-* If the specified id is invalid NULL is returned.
-*/
+ * Returns the isolate object corresponding to the isolate id.
+ *
+ * \return The Dart_Isolate object corresponding to the isolate id.
+ * If the specified id is invalid NULL is returned.
+ */
 DART_EXPORT Dart_Isolate Dart_GetIsolate(Dart_IsolateId isolate_id);
 
 
 /**
- * Returns VM status information. VM status is implemented using a
- * different status plug-in for each type of status; for example, there
- * might be an "isolate" plug-in that returns information about the
- * current isolates.
+ * Returns the isolate id for an isolate.
  *
- * To get a list of status types, this function is called with a
- * status_type parameter of "statustypes". This list is useful when
- * building a status dashboard.
- *
- * TODO(tball): we need to figure out which isolate this command needs
- * to be sent to after parsing the string and then send an OOB message
- * to that isolate.
- *
- * \param request A REST-like string, which uses '/' to separate
- *     parameters. The first parameter is always the status type.
- *
- * \return The requested status as a JSON formatted string, with the
- *     contents defined by the status plug-in. The caller is responsible
- *     for freeing this string.
+ * \return The Dart_IsolateId value corresponding to the isolate.
  */
-DART_EXPORT char* Dart_GetVmStatus(const char* request);
+DART_EXPORT Dart_IsolateId Dart_GetIsolateId(Dart_Isolate isolate);
 
 #endif  // INCLUDE_DART_DEBUGGER_API_H_
