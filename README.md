@@ -1,6 +1,6 @@
 ### dart runtime libs
 
-This repo contains binaries and the one header file needed to embed the [dart][dartlang] runtime in a C / C++ app.  Currently only includes OS X binaries build with libc++ / i386.
+This repo contains binaries and the one header file needed to embed the [dart][dartlang] runtime in a C / C++ app. It is meant to be used in conjunction with [Cinder-Dart](https://github.com/richardeakin/Cinder-Dart). Currently only OS X binaries built with libc++ / i386 are included.
 
 Here are google's [checkout][checkout] and [build][build] instructions, although I built these with the dart.xcodeproj that is generated after the `gclient sync` command.
 
