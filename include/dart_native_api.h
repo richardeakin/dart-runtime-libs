@@ -39,6 +39,7 @@ typedef enum {
   Dart_CObject_kArray,
   Dart_CObject_kTypedData,
   Dart_CObject_kExternalTypedData,
+  Dart_CObject_kSendPort,
   Dart_CObject_kUnsupported,
   Dart_CObject_kNumberOfTypes
 } Dart_CObject_Type;
@@ -52,6 +53,7 @@ typedef struct _Dart_CObject {
     double as_double;
     char* as_string;
     char* as_bigint;
+    Dart_Port as_send_port;
     struct {
       intptr_t length;
       struct _Dart_CObject** values;
@@ -101,8 +103,7 @@ DART_EXPORT bool Dart_PostCObject(Dart_Port port_id, Dart_CObject* message);
  */
 
 typedef void (*Dart_NativeMessageHandler)(Dart_Port dest_port_id,
-Dart_Port reply_port_id,
-Dart_CObject* message);
+                                          Dart_CObject* message);
 
 /**
  * Creates a new native port.  When messages are received on this
@@ -151,26 +152,6 @@ DART_EXPORT void Dart_InitPerfEventsSupport(void* perf_events_file);
 
 
 /*
- * =============
- * Heap Profiler
- * =============
- */
-
-/**
- * Generates a heap profile.
- *
- * \param callback A function pointer that will be repeatedly invoked
- *   with heap profile data.
- * \param stream A pointer that will be passed to the callback.  This
- *   is a convenient way to provide an open stream to the callback.
- *
- * \return Success if the heap profile is successful.
- */
-DART_EXPORT Dart_Handle Dart_HeapProfile(Dart_FileWriteCallback callback,
-                                         void* stream);
-
-
-/*
  * ==================
  * Verification Tools
  * ==================
@@ -183,11 +164,5 @@ DART_EXPORT Dart_Handle Dart_HeapProfile(Dart_FileWriteCallback callback,
  * TODO(turnidge): Document.
  */
 DART_EXPORT Dart_Handle Dart_CompileAll();
-
-/**
- * Check that all function fingerprints are OK.
- *
- */
-DART_EXPORT Dart_Handle Dart_CheckFunctionFingerprints();
 
 #endif  /* INCLUDE_DART_NATIVE_API_H_ */  /* NOLINT */
